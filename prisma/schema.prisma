@@ -1,0 +1,134 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum BetStatus {
+  PENDING
+  WON
+  LOST
+  VOID
+  CASHED_OUT
+}
+
+enum OperationType {
+  SIMPLE
+  ARBITRAGE
+  MATCHED
+}
+
+enum TransactionType {
+  DEPOSIT
+  WITHDRAWAL
+  ADJUSTMENT
+}
+
+model User {
+  id         String      @id @default(cuid())
+  email      String      @unique
+  emailVerified DateTime?
+  name       String?
+  image      String?
+  password   String?
+  createdAt  DateTime    @default(now())
+  bankrolls  Bankroll[]
+  operations Operation[]
+  settings   Json?
+  accounts   Account[]
+  sessions   Session[]
+}
+
+model Account {
+  id                 String  @id @default(cuid())
+  userId             String
+  type               String
+  provider           String
+  providerAccountId  String
+  refresh_token      String? @db.Text
+  access_token       String? @db.Text
+  expires_at         Int?
+  token_type         String?
+  scope              String?
+  id_token           String? @db.Text
+  session_state      String?
+  user               User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+model Bankroll {
+  id             String        @id @default(cuid())
+  userId         String
+  bookmakerName  String
+  currency       String        @default("BRL")
+  currentBalance Decimal       @default(0.00)
+  user           User          @relation(fields: [userId], references: [id])
+  bets           Bet[]
+  transactions   Transaction[]
+  @@unique([userId, bookmakerName])
+}
+
+model Operation {
+  id             String        @id @default(cuid())
+  userId         String
+  type           OperationType @default(SIMPLE)
+  totalStake     Decimal
+  expectedReturn Decimal?
+  actualReturn   Decimal?
+  roi            Decimal?
+  description    String?
+  status         BetStatus     @default(PENDING)
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  user           User          @relation(fields: [userId], references: [id])
+  legs           Bet[]
+}
+
+model Bet {
+  id          String    @id @default(cuid())
+  operationId String
+  bankrollId  String
+  selection   String
+  odds        Decimal
+  stake       Decimal
+  status      BetStatus @default(PENDING)
+  resultValue Decimal?
+  eventDate   DateTime
+  sport       String?
+  league      String?
+  printUrl    String?
+  operation   Operation @relation(fields: [operationId], references: [id], onDelete: Cascade)
+  bankroll    Bankroll  @relation(fields: [bankrollId], references: [id])
+}
+
+model Transaction {
+  id         String          @id @default(cuid())
+  bankrollId String
+  type       TransactionType
+  amount     Decimal
+  fee        Decimal         @default(0.00)
+  date       DateTime        @default(now())
+  notes      String?
+  bankroll   Bankroll        @relation(fields: [bankrollId], references: [id])
+}
