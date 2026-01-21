@@ -115,7 +115,6 @@ export async function createOperation(input: unknown): Promise<ActionResult> {
         where: {
           id: { in: bankrollIds },
           userId: session.user.id,
-          userId: session.user.id,
         },
       });
 
@@ -142,7 +141,7 @@ export async function createOperation(input: unknown): Promise<ActionResult> {
 
       const operation = await tx.operation.create({
         data: {
-          userId: user.id,
+          userId: session.user.id,
           type: type as OperationType,
           totalStake,
           expectedReturn: finalExpectedReturn,
