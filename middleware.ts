@@ -1,8 +1,11 @@
+import NextAuth from "next-auth";
 import { NextResponse } from "next/server";
 
-import { auth } from "@/auth";
+import { authConfig } from "@/auth.config";
 
-export default auth((req) => {
+const { auth: middleware } = NextAuth(authConfig);
+
+export default middleware((req) => {
   if (!req.auth) {
     return NextResponse.redirect(new URL("/login", req.nextUrl));
   }

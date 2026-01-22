@@ -6,7 +6,6 @@ import { authenticate } from "@/app/login/actions";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import Link from "next/link";
 
 const initialState = {};
 
@@ -40,20 +39,14 @@ export function LoginForm() {
             <label className="text-sm text-muted-foreground">Password</label>
             <Input name="password" type="password" placeholder="••••••••" required />
           </div>
-          {state?.error ? (
-            <p className="text-sm text-destructive">{state.error}</p>
+          {state && "error" in state ? (
+            <p className="text-sm text-destructive">{state.error as string}</p>
           ) : null}
           <SubmitButton />
         </form>
         <Button variant="outline" className="w-full" type="button" disabled>
           Sign in with Google (coming soon)
         </Button>
-        <p className="text-sm text-muted-foreground">
-          New here?{" "}
-          <Link href="/register" className="text-primary underline">
-            Create an account
-          </Link>
-        </p>
       </CardContent>
     </Card>
   );

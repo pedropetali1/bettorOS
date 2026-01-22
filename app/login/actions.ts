@@ -13,6 +13,7 @@ export async function authenticate(
   formData: FormData
 ): Promise<LoginState> {
   try {
+    // Use relative path - NextAuth will use the request's origin (with trustHost: true)
     await signIn("credentials", {
       email: formData.get("email"),
       password: formData.get("password"),
