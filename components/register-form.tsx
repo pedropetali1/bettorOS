@@ -26,10 +26,10 @@ export function RegisterForm() {
   const router = useRouter();
 
   useEffect(() => {
-    if (state?.success) {
+    if (state && "success" in state ? state.success : false) {
       router.push("/login");
     }
-  }, [state?.success, router]);
+  }, [state && "success" in state ? state.success : false, router]);
 
   return (
     <Card className="w-full max-w-md">
@@ -53,8 +53,8 @@ export function RegisterForm() {
             <label className="text-sm text-muted-foreground">Password</label>
             <Input name="password" type="password" placeholder="••••••••" required />
           </div>
-          {state?.error ? (
-            <p className="text-sm text-destructive">{state.error}</p>
+          {state && "error" in state ? (
+            <p className="text-sm text-destructive">{state.error as string}</p>
           ) : null}
           <SubmitButton />
         </form>

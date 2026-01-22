@@ -41,8 +41,44 @@ export function BankrollForm() {
       initialBalance: 0,
     },
   });
+  // #region agent log
+  fetch("http://127.0.0.1:7242/ingest/bd0f999b-d44a-4541-8b77-6bbb1d690a90", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      sessionId: "debug-session",
+      runId: "bankroll-form",
+      hypothesisId: "A",
+      location: "components/bankroll-form.tsx:45",
+      message: "Form initialized",
+      data: {
+        initialBalanceDefault: form.getValues("initialBalance"),
+        initialBalanceType: typeof form.getValues("initialBalance"),
+      },
+      timestamp: Date.now(),
+    }),
+  }).catch(() => {});
+  // #endregion agent log
 
   const onSubmit = async (values: BankrollFormValues) => {
+    // #region agent log
+    fetch("http://127.0.0.1:7242/ingest/bd0f999b-d44a-4541-8b77-6bbb1d690a90", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        sessionId: "debug-session",
+        runId: "bankroll-form",
+        hypothesisId: "B",
+        location: "components/bankroll-form.tsx:57",
+        message: "Submit values",
+        data: {
+          initialBalance: values.initialBalance,
+          initialBalanceType: typeof values.initialBalance,
+        },
+        timestamp: Date.now(),
+      }),
+    }).catch(() => {});
+    // #endregion agent log
     setIsSubmitting(true);
     setFeedback(null);
     const result = await createBankroll(values);
@@ -100,7 +136,30 @@ export function BankrollForm() {
           <FormField
             control={form.control}
             name="initialBalance"
-            render={({ field }) => (
+            render={({ field }) => {
+              // #region agent log
+              fetch("http://127.0.0.1:7242/ingest/bd0f999b-d44a-4541-8b77-6bbb1d690a90", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  sessionId: "debug-session",
+                  runId: "bankroll-form",
+                  hypothesisId: "C",
+                  location: "components/bankroll-form.tsx:108",
+                  message: "Render initialBalance field",
+                  data: {
+                    value: field.value,
+                    valueType: typeof field.value,
+                    name: field.name,
+                  },
+                  timestamp: Date.now(),
+                }),
+              }).catch(() => {});
+              // #endregion agent log
+              const { value, ...fieldProps } = field;
+              const safeValue =
+                typeof value === "number" || typeof value === "string" ? value : "";
+              return (
               <FormItem>
                 <FormLabel>Initial Balance</FormLabel>
                 <FormControl>
@@ -109,12 +168,14 @@ export function BankrollForm() {
                     step="0.01"
                     min="0"
                     placeholder="0.00"
-                    {...field}
+                    {...fieldProps}
+                    value={safeValue}
                   />
                 </FormControl>
                 <FormMessage />
               </FormItem>
-            )}
+              );
+            }}
           />
         </div>
 

@@ -109,6 +109,29 @@ export function OperationForm({ bankrolls }: OperationFormProps) {
   }, [selectedType, fields.length, remove]);
 
   const onSubmit = async (values: OperationFormValues) => {
+    // #region agent log
+    fetch("http://127.0.0.1:7242/ingest/bd0f999b-d44a-4541-8b77-6bbb1d690a90", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        sessionId: "debug-session",
+        runId: "operation-form",
+        hypothesisId: "O1",
+        location: "components/operation-form.tsx:111",
+        message: "Submit values",
+        data: {
+          type: values.type,
+          legsCount: values.legs?.length ?? 0,
+          oddsType: typeof values.legs?.[0]?.odds,
+          stakeType: typeof values.legs?.[0]?.stake,
+          eventDateType: typeof values.legs?.[0]?.eventDate,
+          expectedReturnOverrideType: typeof (values as { expectedReturnOverride?: unknown })
+            .expectedReturnOverride,
+        },
+        timestamp: Date.now(),
+      }),
+    }).catch(() => {});
+    // #endregion agent log
     setIsSubmitting(true);
     setFeedback(null);
     const result = await createOperation(values);
@@ -208,41 +231,124 @@ export function OperationForm({ bankrolls }: OperationFormProps) {
               <FormField
                 control={form.control}
                 name={`legs.${index}.odds`}
-                render={({ field }) => (
+                render={({ field }) => {
+                  // #region agent log
+                  fetch("http://127.0.0.1:7242/ingest/bd0f999b-d44a-4541-8b77-6bbb1d690a90", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                      sessionId: "debug-session",
+                      runId: "operation-form",
+                      hypothesisId: "O2",
+                      location: "components/operation-form.tsx:208",
+                      message: "Render odds field",
+                      data: {
+                        value: field.value,
+                        valueType: typeof field.value,
+                        name: field.name,
+                      },
+                      timestamp: Date.now(),
+                    }),
+                  }).catch(() => {});
+                  // #endregion agent log
+                  const { value, ...fieldProps } = field;
+                  const safeValue =
+                    typeof value === "number" || typeof value === "string" ? value : "";
+                  return (
                   <FormItem>
                     <FormLabel>Odds</FormLabel>
                     <FormControl>
-                      <Input type="number" step="0.01" min="1.01" {...field} />
+                      <Input
+                        type="number"
+                        step="0.01"
+                        min="1.01"
+                        {...fieldProps}
+                        value={safeValue}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
-                )}
+                  );
+                }}
               />
               <FormField
                 control={form.control}
                 name={`legs.${index}.stake`}
-                render={({ field }) => (
+                render={({ field }) => {
+                  // #region agent log
+                  fetch("http://127.0.0.1:7242/ingest/bd0f999b-d44a-4541-8b77-6bbb1d690a90", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                      sessionId: "debug-session",
+                      runId: "operation-form",
+                      hypothesisId: "O3",
+                      location: "components/operation-form.tsx:220",
+                      message: "Render stake field",
+                      data: {
+                        value: field.value,
+                        valueType: typeof field.value,
+                        name: field.name,
+                      },
+                      timestamp: Date.now(),
+                    }),
+                  }).catch(() => {});
+                  // #endregion agent log
+                  const { value, ...fieldProps } = field;
+                  const safeValue =
+                    typeof value === "number" || typeof value === "string" ? value : "";
+                  return (
                   <FormItem>
                     <FormLabel>Stake</FormLabel>
                     <FormControl>
-                      <Input type="number" step="0.01" min="0" {...field} />
+                      <Input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        {...fieldProps}
+                        value={safeValue}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
-                )}
+                  );
+                }}
               />
               <FormField
                 control={form.control}
                 name={`legs.${index}.eventDate`}
-                render={({ field }) => (
+                render={({ field }) => {
+                  // #region agent log
+                  fetch("http://127.0.0.1:7242/ingest/bd0f999b-d44a-4541-8b77-6bbb1d690a90", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                      sessionId: "debug-session",
+                      runId: "operation-form",
+                      hypothesisId: "O4",
+                      location: "components/operation-form.tsx:233",
+                      message: "Render eventDate field",
+                      data: {
+                        value: field.value,
+                        valueType: typeof field.value,
+                        name: field.name,
+                      },
+                      timestamp: Date.now(),
+                    }),
+                  }).catch(() => {});
+                  // #endregion agent log
+                  const { value, ...fieldProps } = field;
+                  const safeValue = typeof value === "string" ? value : "";
+                  return (
                   <FormItem>
                     <FormLabel>Event Date</FormLabel>
                     <FormControl>
-                      <Input type="date" {...field} />
+                      <Input type="date" {...fieldProps} value={safeValue} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
-                )}
+                  );
+                }}
               />
             </div>
             <div className="grid gap-4 md:grid-cols-2">
@@ -290,7 +396,30 @@ export function OperationForm({ bankrolls }: OperationFormProps) {
           <FormField
             control={form.control}
             name="expectedReturnOverride"
-            render={({ field }) => (
+            render={({ field }) => {
+              // #region agent log
+              fetch("http://127.0.0.1:7242/ingest/bd0f999b-d44a-4541-8b77-6bbb1d690a90", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  sessionId: "debug-session",
+                  runId: "operation-form",
+                  hypothesisId: "O5",
+                  location: "components/operation-form.tsx:298",
+                  message: "Render expectedReturnOverride field",
+                  data: {
+                    value: field.value,
+                    valueType: typeof field.value,
+                    name: field.name,
+                  },
+                  timestamp: Date.now(),
+                }),
+              }).catch(() => {});
+              // #endregion agent log
+              const { value, ...fieldProps } = field;
+              const safeValue =
+                typeof value === "number" || typeof value === "string" ? value : "";
+              return (
               <FormItem>
                 <FormLabel>Expected Return</FormLabel>
                 <FormControl>
@@ -298,12 +427,14 @@ export function OperationForm({ bankrolls }: OperationFormProps) {
                     type="number"
                     step="0.01"
                     min="0"
-                    {...field}
+                    {...fieldProps}
+                    value={safeValue}
                   />
                 </FormControl>
                 <FormMessage />
               </FormItem>
-            )}
+              );
+            }}
           />
         )}
 
