@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Activity, LayoutDashboard, ListChecks, User, Wallet } from "lucide-react";
+import { Activity, LayoutDashboard, ListChecks, Percent, User, Wallet } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 
@@ -11,6 +11,7 @@ const navItems = [
   { href: "/bankrolls", label: "Bankrolls", icon: Wallet },
   { href: "/operations", label: "Operations", icon: ListChecks },
   { href: "/tools/kelly", label: "Kelly Tool", icon: Activity },
+  { href: "/tools/arbitrage", label: "Surebet Tool", icon: Percent },
   { href: "/account", label: "Account", icon: User },
 ];
 
