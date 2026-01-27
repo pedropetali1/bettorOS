@@ -13,7 +13,7 @@ type ScanResult = {
   league: string | null;
 };
 
-type ActionResult = { ok: boolean; data?: ScanResult; error?: string };
+type ActionResult = { ok: boolean; data?: ScanResult | ScanResult[]; error?: string };
 
 const extractJson = (text: string) => {
   const cleaned = text
@@ -21,6 +21,30 @@ const extractJson = (text: string) => {
     .replace(/```/g, "")
     .trim();
   return cleaned;
+};
+
+const normalizeEmpty = (value: string | null) => {
+  if (!value) return null;
+  const trimmed = value.trim();
+  return trimmed.length ? trimmed : null;
+};
+
+const parseNumber = (value: unknown) => {
+  if (value === null || value === undefined) return null;
+  if (typeof value === "number") return Number.isFinite(value) ? value : null;
+  if (typeof value !== "string") return null;
+  const normalized = value.replace(",", ".").replace(/[^0-9.]/g, "");
+  const parsed = Number(normalized);
+  return Number.isNaN(parsed) ? null : parsed;
+};
+
+const inferMatchName = (value: string | null) => {
+  if (!value) return null;
+  const normalized = value.toLowerCase();
+  if (normalized.includes(" vs ") || normalized.includes(" v ") || normalized.includes(" x ")) {
+    return value.trim();
+  }
+  return null;
 };
 
 const normalize = (value: string) =>
@@ -109,25 +133,69 @@ export async function scanBetImage(formData: FormData): Promise<ActionResult> {
     "bookmakerName, matchName, selection, odds, stake, date, sport, league. " +
     "matchName must be only the teams/competitors (e.g. 'Lakers vs Celtics'). " +
     "selection must be only the bet pick/market (e.g. 'Over 2.5 Goals'). " +
-    "Use null for missing fields. Do not include markdown or extra text.";
+    "If you cannot identify a field, return null. " +
+    "Do not include markdown or extra text.";
 
   try {
-    const result = await model.generateContent([
-      { text: prompt },
-      {
-        inlineData: {
-          data: base64,
-          mimeType: file.type || "image/jpeg",
+    const result = await model.generateContent({
+      contents: [
+        {
+          role: "user",
+          parts: [
+            { text: prompt },
+            {
+              inlineData: {
+                data: base64,
+                mimeType: file.type || "image/jpeg",
+              },
+            },
+          ],
         },
+      ],
+      generationConfig: {
+        responseMimeType: "application/json",
       },
-    ]);
+    });
 
     const raw = result.response.text();
+    console.log("[scanner] raw response:", raw);
     const jsonText = extractJson(raw);
-    const parsed = JSON.parse(jsonText) as ScanResult;
-    const enriched = await enrichWithSportsDb(parsed);
+    console.log("[scanner] json text:", jsonText);
+    const parsed = JSON.parse(jsonText) as ScanResult | ScanResult[];
+    console.log("[scanner] parsed json:", parsed);
+    const items = Array.isArray(parsed) ? parsed : [parsed];
+    const normalizedItems = items.map((item) => {
+      const normalized: ScanResult = {
+        bookmakerName: normalizeEmpty(item?.bookmakerName ?? null),
+        matchName: normalizeEmpty(item?.matchName ?? null),
+        selection: normalizeEmpty(item?.selection ?? null),
+        odds: parseNumber(item?.odds ?? null),
+        stake: parseNumber(item?.stake ?? null),
+        date: normalizeEmpty(item?.date ?? null),
+        sport: normalizeEmpty(item?.sport ?? null),
+        league: normalizeEmpty(item?.league ?? null),
+      };
 
-    return { ok: true, data: enriched };
+      if (!normalized.matchName) {
+        normalized.matchName = inferMatchName(normalized.selection);
+        if (normalized.matchName) {
+          normalized.selection = null;
+        }
+      }
+
+      return normalized;
+    });
+    console.log("[scanner] normalized:", normalizedItems);
+
+    const enriched = await enrichWithSportsDb(normalizedItems[0]);
+    const enrichedItems = normalizedItems.map((item) => ({
+      ...item,
+      sport: item.sport ?? enriched.sport ?? null,
+      league: item.league ?? enriched.league ?? null,
+      date: item.date ?? enriched.date ?? null,
+    }));
+
+    return { ok: true, data: Array.isArray(parsed) ? enrichedItems : enrichedItems[0] };
   } catch (error) {
     if (error instanceof Error) {
       return { ok: false, error: error.message };

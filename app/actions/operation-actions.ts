@@ -104,6 +104,8 @@ export async function createOperation(input: unknown): Promise<ActionResult> {
   }
 
   const { type, legs, description } = parsed.data;
+  const matchedOdds =
+    type === "MATCHED" && "matchedOdds" in parsed.data ? parsed.data.matchedOdds : undefined;
 
   try {
     await prisma.$transaction(async (tx) => {
@@ -131,13 +133,32 @@ export async function createOperation(input: unknown): Promise<ActionResult> {
         }
       });
 
-      const { totalStake, expectedReturn } = calculateTotals(legs);
-      const productOdds = legs.reduce(
-        (acc, leg) => acc.mul(new Prisma.Decimal(leg.odds)),
-        new Prisma.Decimal(1)
-      );
-      const finalExpectedReturn =
-        type === "MATCHED" ? totalStake.mul(productOdds) : expectedReturn;
+      let totalStake: Prisma.Decimal;
+      let finalExpectedReturn: Prisma.Decimal;
+
+      if (type === "MATCHED") {
+        totalStake = legs.reduce(
+          (acc, leg) => acc.add(new Prisma.Decimal(leg.stake)),
+          new Prisma.Decimal(0)
+        );
+
+        if (matchedOdds !== undefined && matchedOdds !== null) {
+          finalExpectedReturn = totalStake.mul(new Prisma.Decimal(matchedOdds));
+        } else {
+          if (legs.some((leg) => !leg.odds)) {
+            throw new Error("Provide odds for all legs or set multiple odds.");
+          }
+          const productOdds = legs.reduce(
+            (acc, leg) => acc.mul(new Prisma.Decimal(leg.odds)),
+            new Prisma.Decimal(1)
+          );
+          finalExpectedReturn = totalStake.mul(productOdds);
+        }
+      } else {
+        const totals = calculateTotals(legs as Array<{ stake: number; odds: number }>);
+        totalStake = totals.totalStake;
+        finalExpectedReturn = totals.expectedReturn;
+      }
 
       const operation = await tx.operation.create({
         data: {
@@ -149,6 +170,11 @@ export async function createOperation(input: unknown): Promise<ActionResult> {
         },
       });
 
+      const matchedOddsValue =
+        matchedOdds !== undefined && matchedOdds !== null
+          ? new Prisma.Decimal(matchedOdds)
+          : null;
+
       for (const leg of legs) {
         const eventId = await findOrCreateEvent({
           name: leg.matchName,
@@ -157,13 +183,20 @@ export async function createOperation(input: unknown): Promise<ActionResult> {
           client: tx,
         });
 
+        const oddsValue =
+          leg.odds !== undefined && leg.odds !== null
+            ? new Prisma.Decimal(leg.odds)
+            : matchedOddsValue && leg.stake > 0
+              ? matchedOddsValue
+              : new Prisma.Decimal(1);
+
         await tx.bet.create({
           data: {
             operationId: operation.id,
             eventId,
             bankrollId: leg.bankrollId,
             selection: leg.selection,
-            odds: leg.odds,
+            odds: oddsValue,
             stake: leg.stake,
             league: leg.league,
           },

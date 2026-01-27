@@ -17,7 +17,7 @@ type ScanResult = {
 };
 
 type BetScannerProps = {
-  onScanComplete: (data: ScanResult) => void;
+  onScanComplete: (data: ScanResult | ScanResult[]) => void;
 };
 
 export function BetScanner({ onScanComplete }: BetScannerProps) {

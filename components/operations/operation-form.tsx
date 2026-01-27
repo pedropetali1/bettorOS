@@ -68,7 +68,7 @@ const typeOptions = [
 const createLeg = (bankrollId: string) => ({
   matchName: "",
   selection: "",
-  odds: 1.9,
+  odds: 0,
   stake: 0,
   eventDate: new Date().toISOString().slice(0, 10),
   sport: "",
@@ -154,6 +154,7 @@ export function OperationForm({ bankrolls }: OperationFormProps) {
     resolver: zodResolver(operationSchema),
     defaultValues: {
       type: OperationType.SIMPLE,
+      matchedOdds: undefined,
       legs: [createLeg(bankrolls[0].id)],
       description: "",
     },
@@ -256,6 +257,7 @@ export function OperationForm({ bankrolls }: OperationFormProps) {
     if (result.ok) {
       form.reset({
         type: OperationType.SIMPLE,
+        matchedOdds: undefined,
         legs: [createLeg(bankrolls[0].id)],
         description: "",
       });
@@ -290,36 +292,111 @@ export function OperationForm({ bankrolls }: OperationFormProps) {
 
         <BetScanner
           onScanComplete={(data) => {
-            const matchedBankroll = matchBankrollId(data.bookmakerName);
-            if (matchedBankroll) {
-              form.setValue("legs.0.bankrollId", matchedBankroll);
+            const items = Array.isArray(data) ? data : [data];
+            const hasMultipleSelections = items.length > 1;
+
+            if (hasMultipleSelections) {
+              form.setValue("type", OperationType.MATCHED);
             }
-            if (data.matchName) {
-              form.setValue("legs.0.matchName", data.matchName);
+
+            const currentLegCount = fields.length;
+            if (currentLegCount < items.length) {
+              for (let i = currentLegCount; i < items.length; i += 1) {
+                append(createLeg(bankrolls[0].id));
+              }
+            } else if (currentLegCount > items.length) {
+              for (let i = currentLegCount - 1; i >= items.length; i -= 1) {
+                remove(i);
+              }
             }
-            if (data.selection) {
-              form.setValue("legs.0.selection", data.selection);
+
+            const commonBankroll = matchBankrollId(items[0]?.bookmakerName ?? null);
+            const oddsValues = items
+              .map((item) => parseNumber(item.odds))
+              .filter((value): value is number => value !== null);
+            const stakeValues = items
+              .map((item) => parseNumber(item.stake))
+              .filter((value): value is number => value !== null);
+            const uniqueOdds = Array.from(new Set(oddsValues));
+            const uniqueStakes = Array.from(new Set(stakeValues));
+            const useCombinedOdds = hasMultipleSelections && uniqueOdds.length === 1;
+
+            if (useCombinedOdds) {
+              form.setValue("matchedOdds", uniqueOdds[0]);
+            } else {
+              form.setValue("matchedOdds", undefined);
             }
-            const odds = parseNumber(data.odds);
-            if (odds !== null) {
-              form.setValue("legs.0.odds", odds);
-            }
-            const stake = parseNumber(data.stake);
-            if (stake !== null) {
-              form.setValue("legs.0.stake", stake);
-            }
-            const date = toDateInput(data.date);
-            if (date) {
-              form.setValue("legs.0.eventDate", date);
-            }
-            if (data.sport) {
-              form.setValue("legs.0.sport", data.sport);
-            }
-            if (data.league) {
-              form.setValue("legs.0.league", data.league);
-            }
+
+            items.forEach((item, index) => {
+              const bankId =
+                commonBankroll ??
+                (item.bookmakerName ? matchBankrollId(item.bookmakerName) : null);
+              if (bankId) {
+                form.setValue(`legs.${index}.bankrollId`, bankId);
+              }
+
+              const matchName = item.matchName ?? items[0]?.matchName ?? null;
+              if (matchName) {
+                form.setValue(`legs.${index}.matchName`, matchName);
+              }
+              if (item.selection) {
+                form.setValue(`legs.${index}.selection`, item.selection);
+              }
+
+              if (useCombinedOdds) {
+                form.setValue(`legs.${index}.odds`, undefined as unknown as number);
+              } else {
+                const odds = parseNumber(item.odds);
+                if (odds !== null) {
+                  form.setValue(`legs.${index}.odds`, odds);
+                }
+              }
+
+              if (useCombinedOdds && uniqueStakes.length === 1 && uniqueStakes[0] !== null) {
+                form.setValue(`legs.${index}.stake`, index === 0 ? uniqueStakes[0] : 0);
+              } else {
+                const stake = parseNumber(item.stake);
+                if (stake !== null) {
+                  form.setValue(`legs.${index}.stake`, stake);
+                }
+              }
+
+              const date = toDateInput(item.date ?? items[0]?.date ?? null);
+              if (date) {
+                form.setValue(`legs.${index}.eventDate`, date);
+              }
+              const sport = item.sport ?? items[0]?.sport ?? null;
+              if (sport) {
+                form.setValue(`legs.${index}.sport`, sport);
+              }
+              const league = item.league ?? items[0]?.league ?? null;
+              if (league) {
+                form.setValue(`legs.${index}.league`, league);
+              }
+            });
           }}
         />
+
+        {selectedType === OperationType.MATCHED ? (
+          <FormField
+            control={form.control}
+            name="matchedOdds"
+            render={({ field }) => {
+              const { value, ...fieldProps } = field;
+              const safeValue =
+                typeof value === "number" || typeof value === "string" ? value : "";
+              return (
+                <FormItem>
+                  <FormLabel>Odd da múltipla</FormLabel>
+                  <FormControl>
+                    <Input type="number" step="0.01" min="1.01" {...fieldProps} value={safeValue} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              );
+            }}
+          />
+        ) : null}
 
         {fields.map((field, index) => (
           <Card key={field.id} className="gap-4 py-4">
@@ -394,6 +471,8 @@ export function OperationForm({ bankrolls }: OperationFormProps) {
                     </FormItem>
                   )}
                 />
+              </div>
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 <FormField
                   control={form.control}
                   name={`legs.${index}.bankrollId`}
@@ -422,8 +501,6 @@ export function OperationForm({ bankrolls }: OperationFormProps) {
                     </FormItem>
                   )}
                 />
-              </div>
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 <FormField
                   control={form.control}
                   name={`legs.${index}.odds`}
