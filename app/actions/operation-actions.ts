@@ -149,7 +149,7 @@ export async function createOperation(input: unknown): Promise<ActionResult> {
             throw new Error("Provide odds for all legs or set multiple odds.");
           }
           const productOdds = legs.reduce(
-            (acc, leg) => acc.mul(new Prisma.Decimal(leg.odds)),
+            (acc, leg) => acc.mul(new Prisma.Decimal(leg.odds!)),
             new Prisma.Decimal(1)
           );
           finalExpectedReturn = totalStake.mul(productOdds);
