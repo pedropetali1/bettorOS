@@ -1,6 +1,8 @@
 "use client";
 
-import { useFormState, useFormStatus } from "react-dom";
+import Link from "next/link";
+import { useActionState } from "react";
+import { useFormStatus } from "react-dom";
 
 import { authenticate } from "@/app/login/actions";
 import { Button } from "@/components/ui/button";
@@ -19,7 +21,7 @@ function SubmitButton() {
 }
 
 export function LoginForm() {
-  const [state, formAction] = useFormState(authenticate, initialState);
+  const [state, formAction] = useActionState(authenticate, initialState);
 
   return (
     <Card className="w-full max-w-md">
@@ -46,6 +48,9 @@ export function LoginForm() {
         </form>
         <Button variant="outline" className="w-full" type="button" disabled>
           Sign in with Google (coming soon)
+        </Button>
+        <Button asChild variant="ghost" className="w-full">
+          <Link href="/register">Create an account</Link>
         </Button>
       </CardContent>
     </Card>
