@@ -6,6 +6,7 @@ import { revalidatePath } from "next/cache";
 
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import { findOrCreateEvent } from "@/lib/services/event-service";
 import { operationSchema } from "@/lib/validations/operation";
 
 type ActionResult = { ok: boolean; message: string };
@@ -103,10 +104,6 @@ export async function createOperation(input: unknown): Promise<ActionResult> {
   }
 
   const { type, legs, description } = parsed.data;
-  const expectedReturnOverride =
-    "expectedReturnOverride" in parsed.data
-      ? parsed.data.expectedReturnOverride
-      : undefined;
 
   try {
     await prisma.$transaction(async (tx) => {
@@ -135,9 +132,12 @@ export async function createOperation(input: unknown): Promise<ActionResult> {
       });
 
       const { totalStake, expectedReturn } = calculateTotals(legs);
-      const finalExpectedReturn = expectedReturnOverride
-        ? new Prisma.Decimal(expectedReturnOverride)
-        : expectedReturn;
+      const productOdds = legs.reduce(
+        (acc, leg) => acc.mul(new Prisma.Decimal(leg.odds)),
+        new Prisma.Decimal(1)
+      );
+      const finalExpectedReturn =
+        type === "MATCHED" ? totalStake.mul(productOdds) : expectedReturn;
 
       const operation = await tx.operation.create({
         data: {
@@ -150,15 +150,21 @@ export async function createOperation(input: unknown): Promise<ActionResult> {
       });
 
       for (const leg of legs) {
+        const eventId = await findOrCreateEvent({
+          name: leg.matchName,
+          date: leg.eventDate,
+          sport: leg.sport,
+          client: tx,
+        });
+
         await tx.bet.create({
           data: {
             operationId: operation.id,
+            eventId,
             bankrollId: leg.bankrollId,
             selection: leg.selection,
             odds: leg.odds,
             stake: leg.stake,
-            eventDate: leg.eventDate,
-            sport: leg.sport,
             league: leg.league,
           },
         });
@@ -213,6 +219,7 @@ export async function getOperations() {
     totalStake: operation.totalStake.toString(),
     expectedReturn: operation.expectedReturn?.toString() ?? null,
     actualReturn: operation.actualReturn?.toString() ?? null,
+    description: operation.description ?? null,
     createdAt: operation.createdAt.toISOString(),
     legs: operation.legs.map((leg) => ({
       id: leg.id,
@@ -224,6 +231,91 @@ export async function getOperations() {
       bankrollName: leg.bankroll.bookmakerName,
     })),
   }));
+}
+
+export async function updateOperationDescription(input: unknown): Promise<ActionResult> {
+  const parsed = z
+    .object({
+      operationId: z.string().min(1),
+      description: z.string().trim().optional(),
+    })
+    .safeParse(input);
+
+  if (!parsed.success) {
+    return {
+      ok: false,
+      message: parsed.error.issues?.[0]?.message ?? "Invalid input.",
+    };
+  }
+
+  const session = await auth();
+
+  if (!session?.user?.id) {
+    throw new Error("Unauthorized");
+  }
+
+  try {
+    const result = await prisma.operation.updateMany({
+      where: { id: parsed.data.operationId, userId: session.user.id },
+      data: { description: parsed.data.description || null },
+    });
+
+    if (result.count === 0) {
+      return { ok: false, message: "Operation not found." };
+    }
+
+    revalidatePath("/operations");
+    return { ok: true, message: "Operation updated successfully." };
+  } catch (error) {
+    if (error instanceof Error) {
+      return { ok: false, message: error.message };
+    }
+    return { ok: false, message: "Failed to update operation." };
+  }
+}
+
+export async function deleteOperation(operationId: string): Promise<ActionResult> {
+  const session = await auth();
+
+  if (!session?.user?.id) {
+    throw new Error("Unauthorized");
+  }
+
+  try {
+    await prisma.$transaction(async (tx) => {
+      const operation = await tx.operation.findFirst({
+        where: { id: operationId, userId: session.user.id },
+        include: { legs: true },
+      });
+
+      if (!operation) {
+        throw new Error("Operation not found.");
+      }
+
+      for (const leg of operation.legs) {
+        const resultValue = leg.resultValue ?? new Prisma.Decimal(0);
+        const delta = leg.stake.sub(resultValue);
+
+        await tx.bankroll.update({
+          where: { id: leg.bankrollId },
+          data: { currentBalance: { increment: delta } },
+        });
+      }
+
+      await tx.bet.deleteMany({ where: { operationId: operation.id } });
+      await tx.operation.delete({ where: { id: operation.id } });
+    });
+
+    revalidatePath("/operations");
+    revalidatePath("/bankrolls");
+    revalidatePath("/");
+    return { ok: true, message: "Operation deleted successfully." };
+  } catch (error) {
+    if (error instanceof Error) {
+      return { ok: false, message: error.message };
+    }
+    return { ok: false, message: "Failed to delete operation." };
+  }
 }
 
 export async function updateBetStatus(input: unknown): Promise<ActionResult> {

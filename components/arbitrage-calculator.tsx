@@ -24,6 +24,7 @@ type BankrollOption = {
 };
 
 type ArbitrageLeg = {
+  matchName: string;
   selection: string;
   odds: string;
   stake: string;
@@ -40,6 +41,7 @@ type ArbitrageFormValues = {
 };
 
 const createLeg = (bankrollId: string) => ({
+  matchName: "",
   selection: "",
   odds: "2.00",
   stake: "",
@@ -153,6 +155,7 @@ export function ArbitrageCalculator({ bankrolls }: { bankrolls: BankrollOption[]
       type: OperationType.ARBITRAGE,
       description: values.description || undefined,
       legs: values.legs.map((leg, index) => ({
+        matchName: leg.matchName,
         selection: leg.selection,
         odds: leg.odds,
         stake: stakes[index]?.toFixed(2) ?? leg.stake,
@@ -207,6 +210,13 @@ export function ArbitrageCalculator({ bankrolls }: { bankrolls: BankrollOption[]
                 )}
               </div>
               <div className="grid gap-4 md:grid-cols-2">
+                <label className="space-y-1 text-sm text-muted-foreground">
+                  Match
+                  <Input
+                    placeholder="Team A vs Team B"
+                    {...form.register(`legs.${index}.matchName`)}
+                  />
+                </label>
                 <label className="space-y-1 text-sm text-muted-foreground">
                   Selection
                   <Input placeholder="Team A" {...form.register(`legs.${index}.selection`)} />

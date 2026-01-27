@@ -57,24 +57,16 @@ export default async function Home() {
       ? totals.actual.sub(totals.stake).div(totals.stake).mul(100)
       : new Prisma.Decimal(0);
 
-  const sportSummary = await prisma.bet.groupBy({
-    by: ["sport"],
+  const betBreakdown = await prisma.bet.findMany({
     where: {
       operation: { userId: session.user.id },
-      sport: { not: null },
     },
-    _count: { id: true },
-    _sum: { stake: true, resultValue: true },
-  });
-
-  const leagueSummary = await prisma.bet.groupBy({
-    by: ["league"],
-    where: {
-      operation: { userId: session.user.id },
-      league: { not: null },
+    select: {
+      stake: true,
+      resultValue: true,
+      league: true,
+      event: { select: { sport: true } },
     },
-    _count: { id: true },
-    _sum: { stake: true, resultValue: true },
   });
 
   const summarizeBreakdown = (
@@ -100,11 +92,41 @@ export default async function Home() {
       .slice(0, 3);
   };
 
+  const sportsAccumulator = new Map<string, { count: number; stake: number; result: number }>();
+  const leaguesAccumulator = new Map<string, { count: number; stake: number; result: number }>();
+
+  betBreakdown.forEach((bet) => {
+    const stake = Number(bet.stake);
+    const resultValue = Number(bet.resultValue ?? 0);
+    const sport = bet.event?.sport ?? "Unknown";
+    const league = bet.league ?? "Unknown";
+
+    const sportEntry = sportsAccumulator.get(sport) ?? { count: 0, stake: 0, result: 0 };
+    sportEntry.count += 1;
+    sportEntry.stake += stake;
+    sportEntry.result += resultValue;
+    sportsAccumulator.set(sport, sportEntry);
+
+    const leagueEntry = leaguesAccumulator.get(league) ?? { count: 0, stake: 0, result: 0 };
+    leagueEntry.count += 1;
+    leagueEntry.stake += stake;
+    leagueEntry.result += resultValue;
+    leaguesAccumulator.set(league, leagueEntry);
+  });
+
   const sportsBreakdown = summarizeBreakdown(
-    sportSummary.map((item) => ({ ...item, label: item.sport }))
+    Array.from(sportsAccumulator.entries()).map(([label, data]) => ({
+      label,
+      _count: { id: data.count },
+      _sum: { stake: new Prisma.Decimal(data.stake), resultValue: new Prisma.Decimal(data.result) },
+    }))
   );
   const leaguesBreakdown = summarizeBreakdown(
-    leagueSummary.map((item) => ({ ...item, label: item.league }))
+    Array.from(leaguesAccumulator.entries()).map(([label, data]) => ({
+      label,
+      _count: { id: data.count },
+      _sum: { stake: new Prisma.Decimal(data.stake), resultValue: new Prisma.Decimal(data.result) },
+    }))
   );
 
   const history = await prisma.operation.findMany({

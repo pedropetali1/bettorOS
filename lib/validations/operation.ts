@@ -7,6 +7,7 @@ const optionalTrimmed = z
   .transform((value) => (value && value.length > 0 ? value : undefined));
 
 const legSchema = z.object({
+  matchName: z.string().min(2, "Match name is required."),
   selection: z.string().min(2, "Selection is required."),
   odds: z.coerce.number().gt(1, "Odds must be greater than 1.0."),
   stake: z.coerce.number().positive("Stake must be greater than zero."),
@@ -35,10 +36,6 @@ const multiLegOperation = baseOperation.extend({
 const arbitraryOperation = baseOperation.extend({
   type: z.literal("MATCHED"),
   legs: z.array(legSchema).min(1),
-  expectedReturnOverride: z
-    .coerce.number()
-    .positive("Expected return must be greater than zero.")
-    .optional(),
 });
 
 export const operationSchema = z.discriminatedUnion("type", [

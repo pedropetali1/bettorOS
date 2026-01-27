@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 
 import { auth } from "@/auth";
 import { getBankrolls } from "@/app/actions/bankroll-actions";
-import { OperationForm } from "@/components/operation-form";
+import { OperationForm } from "@/components/operations/operation-form";
 
 export default async function NewOperationPage() {
   const session = await auth();
