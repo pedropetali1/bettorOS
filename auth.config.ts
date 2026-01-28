@@ -9,7 +9,12 @@ export const authConfig = {
   callbacks: {
     authorized({ auth, request }) {
       const { pathname } = request.nextUrl;
-      if (pathname.startsWith("/login") || pathname.startsWith("/register")) {
+      if (
+        pathname.startsWith("/login") ||
+        pathname.startsWith("/register") ||
+        pathname.startsWith("/forgot-password") ||
+        pathname.startsWith("/reset-password")
+      ) {
         return true;
       }
       if (pathname.startsWith("/api/auth")) {

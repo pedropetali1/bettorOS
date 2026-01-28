@@ -45,6 +45,9 @@ export function LoginForm() {
             <p className="text-sm text-destructive">{state.error as string}</p>
           ) : null}
           <SubmitButton />
+          <Button asChild variant="link" className="w-full px-0 text-sm">
+            <Link href="/forgot-password">Forgot your password?</Link>
+          </Button>
         </form>
         <Button variant="outline" className="w-full" type="button" disabled>
           Sign in with Google (coming soon)

@@ -39,7 +39,7 @@ export default async function AccountPage() {
       <div>
         <h1 className="text-2xl font-semibold">Account</h1>
         <p className="text-sm text-muted-foreground">
-          Manage your profile, bankrolls, and sign out.
+          Manage your profile and sign out.
         </p>
       </div>
       <div className="grid gap-4 lg:grid-cols-3">
@@ -59,28 +59,7 @@ export default async function AccountPage() {
             </div>
           </CardContent>
         </Card>
-        <Card>
-          <CardHeader>
-            <CardTitle>Summary</CardTitle>
-            <CardDescription>Totals tied to this account.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-2 text-sm">
-            <div>
-              <p className="text-xs uppercase text-muted-foreground">Bankrolls</p>
-              <p>{bankrolls.length}</p>
-            </div>
-            <div>
-              <p className="text-xs uppercase text-muted-foreground">Operations</p>
-              <p>{operationsCount}</p>
-            </div>
-            <div>
-              <p className="text-xs uppercase text-muted-foreground">Total Balance</p>
-              <p>
-                {formatCurrency(totalBalance, bankrolls[0]?.currency ?? "BRL")}
-              </p>
-            </div>
-          </CardContent>
-        </Card>
+        
         <Card>
           <CardHeader>
             <CardTitle>Session</CardTitle>
@@ -95,34 +74,7 @@ export default async function AccountPage() {
           </CardContent>
         </Card>
       </div>
-      <Card>
-        <CardHeader>
-          <CardTitle>Bankrolls</CardTitle>
-          <CardDescription>Linked accounts and balances.</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-3 text-sm">
-          {bankrolls.length ? (
-            bankrolls.map((bankroll) => (
-              <div key={bankroll.id} className="flex items-center justify-between">
-                <div>
-                  <p className="font-medium">{bankroll.bookmakerName}</p>
-                  <p className="text-xs text-muted-foreground">{bankroll.currency}</p>
-                </div>
-                <span>
-                  {formatCurrency(
-                    Number(bankroll.currentBalance),
-                    bankroll.currency
-                  )}
-                </span>
-              </div>
-            ))
-          ) : (
-            <p className="text-xs text-muted-foreground">
-              No bankrolls yet. Create one to start tracking balances.
-            </p>
-          )}
-        </CardContent>
-      </Card>
+      
     </div>
   );
 }

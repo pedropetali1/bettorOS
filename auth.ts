@@ -9,7 +9,8 @@ import { prisma as db } from "@/lib/prisma";
 export const { handlers, auth, signIn, signOut } = NextAuth({
   ...authConfig,
   adapter: PrismaAdapter(db),
-  session: { strategy: "jwt" },
+  session: { strategy: "jwt", maxAge: 60 * 30, updateAge: 60 * 5 },
+  jwt: { maxAge: 60 * 30 },
   trustHost: true,
   providers: [
     ...authConfig.providers,
