@@ -24,9 +24,13 @@ export function Sidebar({ onNavigate }: SidebarProps) {
 
   return (
     <aside className="flex h-full flex-col gap-6 border-r bg-sidebar px-4 py-6 text-sidebar-foreground">
-      <div className="flex items-center gap-2 px-2 text-sm font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+      <Link
+        href="/"
+        onClick={onNavigate}
+        className="flex items-center gap-2 px-2 text-sm font-semibold uppercase tracking-[0.2em] text-muted-foreground"
+      >
         BettorOS
-      </div>
+      </Link>
       <nav className="flex flex-col gap-1">
         {navItems.map((item) => {
           const isActive = pathname === item.href;

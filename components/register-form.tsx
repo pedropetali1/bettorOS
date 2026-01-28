@@ -1,12 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { useRouter } from "next/navigation";
 import { registerUser } from "@/app/register/actions";
+import { useToast } from "@/hooks/use-toast";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -37,7 +37,7 @@ type RegisterFormValues = z.infer<typeof registerSchema>;
 
 export function RegisterForm() {
   const router = useRouter();
-  const [serverError, setServerError] = useState<string | null>(null);
+  const { toast } = useToast();
 
   const form = useForm<RegisterFormValues>({
     resolver: zodResolver(registerSchema),
@@ -50,8 +50,6 @@ export function RegisterForm() {
   });
 
   async function onSubmit(data: RegisterFormValues) {
-    setServerError(null);
-    
     // Convertendo para FormData para manter compatibilidade com a Server Action existente
     const formData = new FormData();
     formData.append("name", data.name);
@@ -61,9 +59,19 @@ export function RegisterForm() {
     const result = await registerUser({ error: undefined as string | undefined }, formData);
 
     if (result?.error) {
-      setServerError(result.error);
+      toast({
+        variant: "destructive",
+        title: "Não foi possível criar a conta",
+        description: result.error,
+      });
     } else {
-      router.push("/login");
+      toast({
+        title: "Conta criada com sucesso",
+        description: "Redirecionando para o login.",
+      });
+      setTimeout(() => {
+        router.push("/login");
+      }, 1200);
     }
   }
 
@@ -136,10 +144,6 @@ export function RegisterForm() {
                 </FormItem>
               )}
             />
-
-            {serverError && (
-              <p className="text-sm font-medium text-destructive">{serverError}</p>
-            )}
 
             <Button type="submit" className="w-full" disabled={form.formState.isSubmitting}>
               {form.formState.isSubmitting ? "Creating account..." : "Create account"}
