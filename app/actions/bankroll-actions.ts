@@ -28,6 +28,15 @@ export async function createBankroll(input: unknown): Promise<ActionResult> {
     throw new Error("Unauthorized");
   }
 
+  const user = await prisma.user.findUnique({
+    where: { id: session.user.id },
+    select: { id: true },
+  });
+
+  if (!user) {
+    return { ok: false, message: "User not found. Please sign in again." };
+  }
+
   const { bookmakerName, currency, initialBalance } = parsed.data;
 
   try {

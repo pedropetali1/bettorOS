@@ -239,6 +239,7 @@ export async function getOperations() {
       legs: {
         include: {
           bankroll: true,
+          event: true,
         },
       },
     },
@@ -262,6 +263,11 @@ export async function getOperations() {
       status: leg.status,
       resultValue: leg.resultValue?.toString() ?? null,
       bankrollName: leg.bankroll.bookmakerName,
+      bankrollId: leg.bankrollId,
+      matchName: leg.event?.name ?? "",
+      eventDate: leg.event?.date?.toISOString() ?? null,
+      sport: leg.event?.sport ?? null,
+      league: leg.league ?? null,
     })),
   }));
 }
@@ -348,6 +354,175 @@ export async function deleteOperation(operationId: string): Promise<ActionResult
       return { ok: false, message: error.message };
     }
     return { ok: false, message: "Failed to delete operation." };
+  }
+}
+
+export async function updateOperationDetails(input: unknown): Promise<ActionResult> {
+  const parsed = z
+    .object({
+      operationId: z.string().min(1),
+      description: z.string().trim().optional(),
+      legs: z.array(
+        z.object({
+          id: z.string().min(1),
+          matchName: z.string().min(2),
+          selection: z.string().min(2),
+          odds: z.coerce.number().gt(1),
+          stake: z.coerce.number().min(0),
+          eventDate: z.coerce.date(),
+          sport: z.string().trim().optional(),
+          league: z.string().trim().optional(),
+          bankrollId: z.string().min(1),
+        })
+      ),
+    })
+    .safeParse(input);
+
+  if (!parsed.success) {
+    return {
+      ok: false,
+      message: parsed.error.issues?.[0]?.message ?? "Invalid input.",
+    };
+  }
+
+  const session = await auth();
+
+  if (!session?.user?.id) {
+    throw new Error("Unauthorized");
+  }
+
+  const { operationId, description, legs } = parsed.data;
+
+  try {
+    await prisma.$transaction(async (tx) => {
+      const operation = await tx.operation.findFirst({
+        where: { id: operationId, userId: session.user.id },
+        include: { legs: true },
+      });
+
+      if (!operation) {
+        throw new Error("Operation not found.");
+      }
+
+      if (operation.status !== "PENDING" || operation.legs.some((leg) => leg.status !== "PENDING")) {
+        throw new Error("Only pending operations can be edited.");
+      }
+
+      const bankrollIds = Array.from(new Set(legs.map((leg) => leg.bankrollId)));
+      const bankrolls = await tx.bankroll.findMany({
+        where: { id: { in: bankrollIds }, userId: session.user.id },
+        select: { id: true, currentBalance: true },
+      });
+      if (bankrolls.length !== bankrollIds.length) {
+        throw new Error("One or more bankrolls are invalid.");
+      }
+
+      const bankrollMap = new Map(bankrolls.map((bankroll) => [bankroll.id, bankroll]));
+      const existingLegs = new Map(operation.legs.map((leg) => [leg.id, leg]));
+
+      for (const leg of legs) {
+        const existing = existingLegs.get(leg.id);
+        if (!existing) {
+          throw new Error("Leg not found.");
+        }
+
+        const newStake = new Prisma.Decimal(leg.stake);
+        if (existing.bankrollId === leg.bankrollId) {
+          const delta = newStake.sub(existing.stake);
+          if (delta.gt(0)) {
+            const bankroll = bankrollMap.get(leg.bankrollId);
+            if (!bankroll || bankroll.currentBalance.lt(delta)) {
+              throw new Error("Insufficient bankroll balance.");
+            }
+            await tx.bankroll.update({
+              where: { id: leg.bankrollId },
+              data: { currentBalance: { decrement: delta } },
+            });
+          } else if (delta.lt(0)) {
+            await tx.bankroll.update({
+              where: { id: leg.bankrollId },
+              data: { currentBalance: { increment: delta.abs() } },
+            });
+          }
+        } else {
+          await tx.bankroll.update({
+            where: { id: existing.bankrollId },
+            data: { currentBalance: { increment: existing.stake } },
+          });
+
+          const nextBankroll = bankrollMap.get(leg.bankrollId);
+          if (!nextBankroll || nextBankroll.currentBalance.lt(newStake)) {
+            throw new Error("Insufficient bankroll balance.");
+          }
+
+          await tx.bankroll.update({
+            where: { id: leg.bankrollId },
+            data: { currentBalance: { decrement: newStake } },
+          });
+        }
+
+        const eventId = await findOrCreateEvent({
+          name: leg.matchName,
+          date: leg.eventDate,
+          sport: leg.sport,
+          client: tx,
+        });
+
+        await tx.bet.update({
+          where: { id: leg.id },
+          data: {
+            selection: leg.selection,
+            odds: new Prisma.Decimal(leg.odds),
+            stake: new Prisma.Decimal(leg.stake),
+            bankrollId: leg.bankrollId,
+            league: leg.league?.trim() || null,
+            eventId,
+          },
+        });
+      }
+
+      const refreshed = await tx.bet.findMany({
+        where: { operationId },
+        select: { stake: true, odds: true },
+      });
+
+      const totalStake = refreshed.reduce(
+        (acc, leg) => acc.add(leg.stake),
+        new Prisma.Decimal(0)
+      );
+
+      const expectedReturn =
+        operation.type === "MATCHED"
+          ? totalStake.mul(
+              refreshed.reduce(
+                (acc, leg) => acc.mul(leg.odds),
+                new Prisma.Decimal(1)
+              )
+            )
+          : refreshed.reduce(
+              (acc, leg) => acc.add(leg.stake.mul(leg.odds)),
+              new Prisma.Decimal(0)
+            );
+
+      await tx.operation.update({
+        where: { id: operationId },
+        data: {
+          description: description?.trim() || null,
+          totalStake,
+          expectedReturn,
+        },
+      });
+    });
+
+    revalidatePath("/operations");
+    revalidatePath("/bankrolls");
+    revalidatePath("/");
+    return { ok: true, message: "Operation updated successfully." };
+  } catch (error) {
+    if (error instanceof Error) {
+      return { ok: false, message: error.message };
+    }
+    return { ok: false, message: "Failed to update operation." };
   }
 }
 

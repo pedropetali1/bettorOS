@@ -1,10 +1,10 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { type BetStatus, type OperationType } from "@prisma/client";
 import { MoreHorizontal } from "lucide-react";
 
-import { deleteOperation, updateOperationDescription } from "@/app/actions/operation-actions";
+import { deleteOperation, updateOperationDescription, updateOperationDetails } from "@/app/actions/operation-actions";
 import { BetActions } from "@/components/bet-actions";
 import { SettleOperationDialog } from "@/components/settle-operation-dialog";
 import { Button } from "@/components/ui/button";
@@ -17,6 +17,14 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { useToast } from "@/hooks/use-toast";
 
 type OperationLeg = {
   id: string;
@@ -26,6 +34,11 @@ type OperationLeg = {
   status: BetStatus;
   resultValue?: string | null;
   bankrollName: string;
+  bankrollId: string;
+  matchName: string;
+  eventDate: string | null;
+  sport: string | null;
+  league: string | null;
 };
 
 type OperationSummary = {
@@ -42,6 +55,7 @@ type OperationSummary = {
 
 type OperationCardProps = {
   operation: OperationSummary;
+  bankrolls: Array<{ id: string; bookmakerName: string }>;
 };
 
 const statusStyles: Record<BetStatus, string> = {
@@ -52,13 +66,15 @@ const statusStyles: Record<BetStatus, string> = {
   PENDING: "border-amber-500/40 bg-amber-500/10 text-amber-200",
 };
 
-export function OperationCard({ operation }: OperationCardProps) {
+export function OperationCard({ operation, bankrolls }: OperationCardProps) {
   const [isPending, startTransition] = useTransition();
   const [menuOpen, setMenuOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [description, setDescription] = useState(operation.description ?? "");
   const [message, setMessage] = useState<string | null>(null);
+  const menuRef = useRef<HTMLDivElement | null>(null);
+  const { toast } = useToast();
   const stake = Number(operation.totalStake);
   const returnValue = Number(operation.actualReturn ?? operation.expectedReturn ?? 0);
   const roi = stake > 0 ? ((returnValue - stake) / stake) * 100 : 0;
@@ -67,48 +83,82 @@ export function OperationCard({ operation }: OperationCardProps) {
   const isMultiLeg = operation.type !== "SIMPLE";
 
   const legList = useMemo(() => operation.legs, [operation.legs]);
+  const [editLegs, setEditLegs] = useState(
+    operation.legs.map((leg) => ({
+      ...leg,
+      oddsValue: Number(leg.odds),
+      stakeValue: Number(leg.stake),
+      eventDateValue: leg.eventDate ?? "",
+    }))
+  );
+
+  const openEditDialog = () => {
+    setDescription(operation.description ?? "");
+    setEditLegs(
+      operation.legs.map((leg) => ({
+        ...leg,
+        oddsValue: Number(leg.odds),
+        stakeValue: Number(leg.stake),
+        eventDateValue: leg.eventDate ?? "",
+      }))
+    );
+    setEditOpen(true);
+  };
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    const handleClick = (event: MouseEvent) => {
+      if (!menuRef.current) return;
+      if (!menuRef.current.contains(event.target as Node)) {
+        setMenuOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [menuOpen]);
 
   return (
     <div className="rounded-lg border bg-card">
-      <div className="flex flex-col gap-3 border-b px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-row gap-3 border-b px-4 py-3 items-center justify-between">
         <span
           className={`w-fit rounded-full border px-2.5 py-1 text-xs font-semibold ${statusStyles[operation.status]}`}
         >
           {operation.status}
         </span>
-        <details
-          className="relative ml-auto"
-          open={menuOpen}
-          onToggle={(event) => setMenuOpen((event.target as HTMLDetailsElement).open)}
-        >
-          <summary className="list-none [&::-webkit-details-marker]:hidden">
-            <Button size="icon" variant="ghost" aria-label="Opcoes">
-              <MoreHorizontal className="size-4" />
-            </Button>
-          </summary>
-          <div className="absolute right-0 mt-2 w-36 rounded-md border bg-popover p-1 text-sm shadow-md">
-            <button
-              type="button"
-              className="w-full rounded px-2 py-1 text-left hover:bg-muted"
-              onClick={() => {
-                setMenuOpen(false);
-                setEditOpen(true);
-              }}
-            >
-              Editar
-            </button>
-            <button
-              type="button"
-              className="w-full rounded px-2 py-1 text-left text-destructive hover:bg-muted"
-              onClick={() => {
-                setMenuOpen(false);
-                setDeleteOpen(true);
-              }}
-            >
-              Deletar
-            </button>
-          </div>
-        </details>
+        <div ref={menuRef} className="relative ml-auto">
+          <Button
+            size="icon"
+            variant="ghost"
+            aria-label="Opcoes"
+            onClick={() => setMenuOpen((open) => !open)}
+          >
+            <MoreHorizontal className="size-4" />
+          </Button>
+          {menuOpen ? (
+            <div className="absolute right-0 mt-2 w-36 rounded-md border bg-popover p-1 text-sm shadow-md">
+              <button
+                type="button"
+                className="w-full rounded px-2 py-1 text-left hover:bg-muted"
+                onClick={() => {
+                  setMenuOpen(false);
+                  openEditDialog();
+                }}
+              >
+                Editar
+              </button>
+              <button
+                type="button"
+                className="w-full rounded px-2 py-1 text-left text-destructive hover:bg-muted"
+                onClick={() => {
+                  setMenuOpen(false);
+                  setDeleteOpen(true);
+                }}
+              >
+                Deletar
+              </button>
+            </div>
+          ) : null}
+        </div>
       </div>
 
       <div className="space-y-3 px-4 py-4">
@@ -191,16 +241,143 @@ export function OperationCard({ operation }: OperationCardProps) {
             <DialogTitle>Editar Operacao</DialogTitle>
             <DialogDescription>Atualize as observacoes desta operacao.</DialogDescription>
           </DialogHeader>
-          <div className="space-y-2">
-            <label className="text-sm text-muted-foreground">Descricao</label>
-            <Input
-              value={description}
-              onChange={(event) => setDescription(event.target.value)}
-              placeholder="Notas da operacao"
-            />
-            {message ? (
-              <p className="text-xs text-muted-foreground">{message}</p>
-            ) : null}
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <label className="text-sm text-muted-foreground">Descricao</label>
+              <Input
+                value={description}
+                onChange={(event) => setDescription(event.target.value)}
+                placeholder="Notas da operacao"
+              />
+              {message ? (
+                <p className="text-xs text-muted-foreground">{message}</p>
+              ) : null}
+            </div>
+            <div className="space-y-4">
+              {editLegs.map((leg, index) => (
+                <div key={leg.id} className="rounded-md border bg-muted/20 p-3 space-y-3">
+                  <p className="text-xs font-semibold uppercase text-muted-foreground">
+                    Leg {index + 1}
+                  </p>
+                  <Input
+                    value={leg.matchName}
+                    onChange={(event) =>
+                      setEditLegs((current) =>
+                        current.map((item) =>
+                          item.id === leg.id ? { ...item, matchName: event.target.value } : item
+                        )
+                      )
+                    }
+                    placeholder="Jogo / Evento"
+                  />
+                  <Input
+                    value={leg.selection}
+                    onChange={(event) =>
+                      setEditLegs((current) =>
+                        current.map((item) =>
+                          item.id === leg.id ? { ...item, selection: event.target.value } : item
+                        )
+                      )
+                    }
+                    placeholder="Selecao"
+                  />
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    <Input
+                      type="number"
+                      step="0.01"
+                      min="1.01"
+                      value={leg.oddsValue}
+                      onChange={(event) =>
+                        setEditLegs((current) =>
+                          current.map((item) =>
+                            item.id === leg.id
+                              ? { ...item, oddsValue: Number(event.target.value) }
+                              : item
+                          )
+                        )
+                      }
+                      placeholder="Odds"
+                    />
+                    <Input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={leg.stakeValue}
+                      onChange={(event) =>
+                        setEditLegs((current) =>
+                          current.map((item) =>
+                            item.id === leg.id
+                              ? { ...item, stakeValue: Number(event.target.value) }
+                              : item
+                          )
+                        )
+                      }
+                      placeholder="Stake"
+                    />
+                  </div>
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    <Input
+                      type="date"
+                      value={leg.eventDateValue}
+                      onChange={(event) =>
+                        setEditLegs((current) =>
+                          current.map((item) =>
+                            item.id === leg.id
+                              ? { ...item, eventDateValue: event.target.value }
+                              : item
+                          )
+                        )
+                      }
+                    />
+                    <Select
+                      value={leg.bankrollId}
+                      onValueChange={(value) =>
+                        setEditLegs((current) =>
+                          current.map((item) =>
+                            item.id === leg.id ? { ...item, bankrollId: value } : item
+                          )
+                        )
+                      }
+                    >
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder="Bankroll" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {bankrolls.map((bankroll) => (
+                          <SelectItem key={bankroll.id} value={bankroll.id}>
+                            {bankroll.bookmakerName}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    <Input
+                      value={leg.sport ?? ""}
+                      onChange={(event) =>
+                        setEditLegs((current) =>
+                          current.map((item) =>
+                            item.id === leg.id ? { ...item, sport: event.target.value } : item
+                          )
+                        )
+                      }
+                      placeholder="Sport"
+                    />
+                    <Input
+                      value={leg.league ?? ""}
+                      onChange={(event) =>
+                        setEditLegs((current) =>
+                          current.map((item) =>
+                            item.id === leg.id ? { ...item, league: event.target.value } : item
+                          )
+                        )
+                      }
+                      placeholder="League"
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
           <DialogFooter>
             <Button
@@ -213,13 +390,31 @@ export function OperationCard({ operation }: OperationCardProps) {
             <Button
               onClick={() => {
                 startTransition(async () => {
-                  const result = await updateOperationDescription({
+                  const result = await updateOperationDetails({
                     operationId: operation.id,
                     description,
+                    legs: editLegs.map((leg) => ({
+                      id: leg.id,
+                      matchName: leg.matchName,
+                      selection: leg.selection,
+                      odds: leg.oddsValue,
+                      stake: leg.stakeValue,
+                      eventDate: leg.eventDateValue,
+                      sport: leg.sport ?? undefined,
+                      league: leg.league ?? undefined,
+                      bankrollId: leg.bankrollId,
+                    })),
                   });
                   setMessage(result.message);
                   if (result.ok) {
+                    toast({ title: "Operacao atualizada", description: result.message });
                     setEditOpen(false);
+                  } else {
+                    toast({
+                      variant: "destructive",
+                      title: "Nao foi possivel atualizar",
+                      description: result.message,
+                    });
                   }
                 });
               }}
