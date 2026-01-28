@@ -35,6 +35,7 @@ import {
   OperationFormValues,
   operationSchema,
 } from "@/lib/validations/operation";
+import { useToast } from "@/hooks/use-toast";
 
 type BankrollOption = {
   id: string;
@@ -45,6 +46,7 @@ type BankrollOption = {
 
 type OperationFormProps = {
   bankrolls: BankrollOption[];
+  onSuccess?: () => void;
 };
 
 const typeOptions = [
@@ -76,9 +78,9 @@ const createLeg = (bankrollId: string) => ({
   bankrollId,
 });
 
-export function OperationForm({ bankrolls }: OperationFormProps) {
-  const [feedback, setFeedback] = useState<string | null>(null);
+export function OperationForm({ bankrolls, onSuccess }: OperationFormProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const { toast } = useToast();
 
   const balanceById = useMemo(
     () =>
@@ -142,8 +144,8 @@ export function OperationForm({ bankrolls }: OperationFormProps) {
     return (
       <div className="rounded-lg border bg-card p-6 text-sm text-muted-foreground">
         You need at least one bankroll before creating an operation.{" "}
-        <Link href="/bankrolls/new" className="text-primary underline">
-          Add a bankroll
+        <Link href="/onboarding" className="text-primary underline">
+          Start onboarding
         </Link>
         .
       </div>
@@ -188,7 +190,6 @@ export function OperationForm({ bankrolls }: OperationFormProps) {
   const onSubmit = async (values: OperationFormValues) => {
     let hasError = false;
     let errorMessage: string | null = null;
-    setFeedback(null);
 
     if (values.type === OperationType.ARBITRAGE) {
       if (values.legs.length !== 2) {
@@ -245,14 +246,17 @@ export function OperationForm({ bankrolls }: OperationFormProps) {
     });
 
     if (hasError) {
-      setFeedback(errorMessage ?? "Corrija os erros antes de continuar.");
+      toast({
+        variant: "destructive",
+        title: "Revise os dados",
+        description: errorMessage ?? "Corrija os erros antes de continuar.",
+      });
       return;
     }
 
     setIsSubmitting(true);
     const result = await createOperation(values);
     setIsSubmitting(false);
-    setFeedback(result.message);
 
     if (result.ok) {
       form.reset({
@@ -260,6 +264,14 @@ export function OperationForm({ bankrolls }: OperationFormProps) {
         matchedOdds: undefined,
         legs: [createLeg(bankrolls[0].id)],
         description: "",
+      });
+      toast({ title: "Operação criada", description: result.message });
+      onSuccess?.();
+    } else {
+      toast({
+        variant: "destructive",
+        title: "Não foi possível criar a operação",
+        description: result.message,
       });
     }
   };
@@ -472,7 +484,7 @@ export function OperationForm({ bankrolls }: OperationFormProps) {
                   )}
                 />
               </div>
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              <div className="grid gap-4 sm:grid-cols-4 lg:grid-cols-4">
                 <FormField
                   control={form.control}
                   name={`legs.${index}.bankrollId`}
@@ -501,54 +513,58 @@ export function OperationForm({ bankrolls }: OperationFormProps) {
                     </FormItem>
                   )}
                 />
-                <FormField
-                  control={form.control}
-                  name={`legs.${index}.odds`}
-                  render={({ field }) => {
-                    const { value, ...fieldProps } = field;
-                    const safeValue =
-                      typeof value === "number" || typeof value === "string" ? value : "";
-                    return (
-                      <FormItem>
-                        <FormLabel>Odds</FormLabel>
-                        <FormControl>
-                          <Input
-                            type="number"
-                            step="0.01"
-                            min="1.01"
-                            {...fieldProps}
-                            value={safeValue}
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    );
-                  }}
-                />
-                <FormField
-                  control={form.control}
-                  name={`legs.${index}.stake`}
-                  render={({ field }) => {
-                    const { value, ...fieldProps } = field;
-                    const safeValue =
-                      typeof value === "number" || typeof value === "string" ? value : "";
-                    return (
-                      <FormItem>
-                        <FormLabel>Stake</FormLabel>
-                        <FormControl>
-                          <Input
-                            type="number"
-                            step="0.01"
-                            min="0"
-                            {...fieldProps}
-                            value={safeValue}
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    );
-                  }}
-                />
+                <div className="grid gap-4 grid-cols-2">
+                  <FormField
+                    control={form.control}
+                    name={`legs.${index}.odds`}
+                    render={({ field }) => {
+                      const { value, ...fieldProps } = field;
+                      const safeValue =
+                        typeof value === "number" || typeof value === "string" ? value : "";
+                      return (
+                        <FormItem>
+                          <FormLabel>Odds</FormLabel>
+                          <FormControl>
+                            <Input
+                              type="number"
+                              step="0.01"
+                              min="1.01"
+                              {...fieldProps}
+                              value={safeValue}
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      );
+                    }}
+                  />
+                  <FormField
+                    control={form.control}
+                    name={`legs.${index}.stake`}
+                    render={({ field }) => {
+                      const { value, ...fieldProps } = field;
+                      const safeValue =
+                        typeof value === "number" || typeof value === "string" ? value : "";
+                        return (
+                        <FormItem>
+                          <FormLabel>Stake</FormLabel>
+                          <FormControl>
+                            <Input
+                              type="number"
+                              step="0.01"
+                              min="0"
+                              {...fieldProps}
+                              value={safeValue}
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      );
+                    }}
+                  />
+                </div>
+              </div>
+              <div className="grid gap-4 sm:grid-cols-6">
                 <FormField
                   control={form.control}
                   name={`legs.${index}.eventDate`}
@@ -566,8 +582,6 @@ export function OperationForm({ bankrolls }: OperationFormProps) {
                     );
                   }}
                 />
-              </div>
-              <div className="grid gap-4 sm:grid-cols-2">
                 <FormField
                   control={form.control}
                   name={`legs.${index}.sport`}
@@ -623,10 +637,6 @@ export function OperationForm({ bankrolls }: OperationFormProps) {
             </FormItem>
           )}
         />
-
-        {feedback ? (
-          <p className="text-sm text-muted-foreground">{feedback}</p>
-        ) : null}
 
         <Button type="submit" disabled={isSubmitting} className="w-full sm:w-auto">
           {isSubmitting ? "Saving..." : "Create Operation"}

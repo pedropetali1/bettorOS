@@ -22,6 +22,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
+import { useToast } from "@/hooks/use-toast";
 import {
   BankrollFormValues,
   bankrollSchema,
@@ -29,9 +30,13 @@ import {
 
 const currencies = ["BRL", "USD", "EUR"];
 
-export function BankrollForm() {
-  const [feedback, setFeedback] = useState<string | null>(null);
+type BankrollFormProps = {
+  onSuccess?: () => void;
+};
+
+export function BankrollForm({ onSuccess }: BankrollFormProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const { toast } = useToast();
 
   const form = useForm<BankrollFormValues>({
     resolver: zodResolver(bankrollSchema),
@@ -44,13 +49,19 @@ export function BankrollForm() {
 
   const onSubmit = async (values: BankrollFormValues) => {
     setIsSubmitting(true);
-    setFeedback(null);
     const result = await createBankroll(values);
     setIsSubmitting(false);
-    setFeedback(result.message);
 
     if (result.ok) {
       form.reset({ bookmakerName: "", currency: "BRL", initialBalance: 0 });
+      toast({ title: "Bankroll criada", description: result.message });
+      onSuccess?.();
+    } else {
+      toast({
+        variant: "destructive",
+        title: "Não foi possível criar a bankroll",
+        description: result.message,
+      });
     }
   };
 
@@ -123,10 +134,6 @@ export function BankrollForm() {
             }}
           />
         </div>
-
-        {feedback ? (
-          <p className="text-sm text-muted-foreground">{feedback}</p>
-        ) : null}
 
         <Button type="submit" disabled={isSubmitting}>
           {isSubmitting ? "Saving..." : "Create Bankroll"}
