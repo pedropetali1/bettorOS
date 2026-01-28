@@ -12,6 +12,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { Download } from "lucide-react";
 
 export default async function BankrollsPage() {
   const session = await auth();
@@ -31,13 +32,25 @@ export default async function BankrollsPage() {
             Track balances across your bookmakers.
           </p>
         </div>
-        <Button asChild>
-          <Link href="/bankrolls/new">New Bankroll</Link>
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button asChild>
+            <Link href="/bankrolls/new">New Bankroll</Link>
+          </Button>
+          <Button asChild variant="outline">
+            <Link href="/api/export/bankrolls">
+              <Download className="size-4" />
+              Export CSV
+            </Link>
+          </Button>
+        </div>
       </div>
       {bankrolls.length === 0 ? (
         <div className="rounded-lg border bg-card p-6 text-sm text-muted-foreground">
-          No bankrolls yet. Add your first bankroll to get started.
+          No bankrolls yet. Start onboarding to add your first bankroll.{" "}
+          <Link href="/onboarding" className="text-primary underline">
+            Go to onboarding
+          </Link>
+          .
         </div>
       ) : (
         <div className="rounded-lg border bg-card">

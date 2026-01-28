@@ -1,9 +1,12 @@
 import { Prisma } from "@prisma/client";
 import { format } from "date-fns";
+import Link from "next/link";
 import { redirect } from "next/navigation";
+import { ChevronRight, Download } from "lucide-react";
 
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import { Button } from "@/components/ui/button";
 
 function formatCurrency(value: number, currency: string) {
   return new Intl.NumberFormat("pt-BR", {
@@ -15,12 +18,56 @@ function formatCurrency(value: number, currency: string) {
 
 const colors = ["#6366f1", "#10b981", "#f97316", "#ec4899", "#14b8a6"];
 
-export default async function Home() {
+type DashboardPeriod = "7d" | "30d" | "90d" | "all";
+
+const periodOptions: Array<{ value: DashboardPeriod; label: string }> = [
+  { value: "7d", label: "7D" },
+  { value: "30d", label: "30D" },
+  { value: "90d", label: "90D" },
+  { value: "all", label: "All" },
+];
+
+const resolvePeriodStart = (value: string | undefined) => {
+  const period = (periodOptions.find((option) => option.value === value)?.value ??
+    "all") as DashboardPeriod;
+  if (period === "all") return { period, dateFrom: null };
+  const days = Number(period.replace("d", ""));
+  const dateFrom = new Date();
+  dateFrom.setDate(dateFrom.getDate() - days);
+  dateFrom.setHours(0, 0, 0, 0);
+  return { period, dateFrom };
+};
+
+export default async function Home({
+  searchParams,
+}: {
+  searchParams?: Promise<{ period?: string }>;
+}) {
   const session = await auth();
 
   if (!session?.user?.id) {
     redirect("/login");
   }
+
+  const onboarding = await prisma.user.findUnique({
+    where: { id: session.user.id },
+    select: { settings: true },
+  });
+
+  const settings =
+    onboarding?.settings && typeof onboarding.settings === "object"
+      ? onboarding.settings
+      : null;
+  const hasCompleted = settings
+    ? Boolean((settings as { onboardingCompleted?: boolean }).onboardingCompleted)
+    : false;
+
+  if (!hasCompleted) {
+    redirect("/onboarding");
+  }
+
+  const resolvedSearchParams = searchParams ? await searchParams : undefined;
+  const { period, dateFrom } = resolvePeriodStart(resolvedSearchParams?.period);
 
   const bankrolls = await prisma.bankroll.findMany({
     where: { userId: session.user.id },
@@ -33,11 +80,19 @@ export default async function Home() {
   );
 
   const activeOperations = await prisma.operation.count({
-    where: { userId: session.user.id, status: "PENDING" },
+    where: {
+      userId: session.user.id,
+      status: "PENDING",
+      ...(dateFrom ? { createdAt: { gte: dateFrom } } : {}),
+    },
   });
 
   const settledOperations = await prisma.operation.findMany({
-    where: { userId: session.user.id, actualReturn: { not: null } },
+    where: {
+      userId: session.user.id,
+      actualReturn: { not: null },
+      ...(dateFrom ? { createdAt: { gte: dateFrom } } : {}),
+    },
     select: { totalStake: true, actualReturn: true },
   });
 
@@ -59,7 +114,10 @@ export default async function Home() {
 
   const betBreakdown = await prisma.bet.findMany({
     where: {
-      operation: { userId: session.user.id },
+      operation: {
+        userId: session.user.id,
+        ...(dateFrom ? { createdAt: { gte: dateFrom } } : {}),
+      },
     },
     select: {
       stake: true,
@@ -133,6 +191,7 @@ export default async function Home() {
     where: {
       userId: session.user.id,
       actualReturn: { not: null },
+      ...(dateFrom ? { updatedAt: { gte: dateFrom } } : {}),
     },
     orderBy: { updatedAt: "asc" },
     select: {
@@ -183,35 +242,69 @@ export default async function Home() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <h1 className="text-2xl font-semibold">Dashboard</h1>
-        <p className="text-sm text-muted-foreground">
-          Monitor bankrolls, operations, and performance at a glance.
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-semibold">Dashboard</h1>
+          <p className="text-sm text-muted-foreground">
+            Monitor bankrolls, operations, and performance at a glance.
+          </p>
+        </div>
+        <Button asChild variant="outline" aria-label="Export dashboard CSV">
+          <Link href={`/api/export/dashboard${period === "all" ? "" : `?period=${period}`}`}>
+            Export CSV
+            <Download  />
+          </Link>
+        </Button>
       </div>
-      <div className="grid gap-4 md:grid-cols-3">
-        <div className="rounded-lg border bg-card p-4">
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap gap-2">
+          {periodOptions.map((option) => (
+            <Link
+              key={option.value}
+              href={option.value === "all" ? "/" : `/?period=${option.value}`}
+              className={`rounded-full border px-3 py-1 text-xs font-medium ${
+                period === option.value
+                  ? "border-primary bg-primary/10 text-primary"
+                  : "text-muted-foreground"
+              }`}
+            >
+              {option.label}
+            </Link>
+          ))}
+        </div>
+      </div>
+      <div className="grid gap-4 md:grid-cols-2">
+        <Link href="/bankrolls" className="group relative rounded-lg bg-card p-4 shadow-sm">
+          <ChevronRight className="absolute right-4 top-4 size-4 text-muted-foreground transition group-hover:text-foreground" />
           <p className="text-xs uppercase text-muted-foreground">Total Balance</p>
           <p className="mt-2 text-2xl font-semibold">
             {formatCurrency(Number(totalBalance), bankrolls[0]?.currency ?? "BRL")}
           </p>
-        </div>
-        <div className="rounded-lg border bg-card p-4">
-          <p className="text-xs uppercase text-muted-foreground">
-            Active Operations
-          </p>
-          <p className="mt-2 text-2xl font-semibold">{activeOperations}</p>
-        </div>
-        <div className="rounded-lg border bg-card p-4">
-          <p className="text-xs uppercase text-muted-foreground">ROI</p>
-          <p className="mt-2 text-2xl font-semibold">
-            {roi.toFixed(2)}
-            <span className="text-sm text-muted-foreground">%</span>
-          </p>
+        </Link>
+        <div className="grid gap-4 grid-cols-2 md:grid-cols-2">
+          <Link href="/operations" className="group relative rounded-lg bg-card p-4 shadow-sm">
+            <ChevronRight className="absolute right-4 top-4 size-4 text-muted-foreground transition group-hover:text-foreground" />
+            <p className="text-xs uppercase text-muted-foreground">
+              Active Operations
+            </p>
+            <p className="mt-2 text-2xl font-semibold">{activeOperations}</p>
+          </Link>
+          <div className="relative rounded-lg bg-card p-4 shadow-sm">
+            <p className="text-xs uppercase text-muted-foreground">ROI</p>
+            <p
+              className={`mt-2 flex items-center gap-2 text-2xl font-semibold ${
+                roi.gte(0) ? "text-emerald-400" : "text-red-400"
+              }`}
+            >
+              {roi.gte(0) ? "↗" : "↘"}
+              {roi.toFixed(2)}
+              <span className="text-sm text-muted-foreground">%</span>
+            </p>
+          </div>
         </div>
       </div>
       <div className="grid gap-4 lg:grid-cols-[1fr,2fr]">
-        <div className="rounded-lg border bg-card p-6">
+        <div className="rounded-lg bg-card p-6 shadow-sm">
           <p className="text-xs uppercase text-muted-foreground">Balance Breakdown</p>
           <div
             className="mx-auto mt-4 h-40 w-40 rounded-full border bg-muted/40"
@@ -242,52 +335,54 @@ export default async function Home() {
           </div>
         </div>
       </div>
-      <div className="grid gap-4 lg:grid-cols-3">
-        <div className="rounded-lg border bg-card p-6">
-          <p className="text-xs uppercase text-muted-foreground">Top Sports</p>
-          <div className="mt-4 space-y-3 text-sm">
-            {sportsBreakdown.length ? (
-              sportsBreakdown.map((item) => (
-                <div key={item.label} className="flex items-center justify-between gap-2">
-                  <div>
-                    <p className="font-medium">{item.label}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {item.bets} bets • ROI {item.roi.toFixed(1)}%
-                    </p>
+      <div className="grid gap-4 lg:grid-cols-2">
+        <div className="grid gap-4 grid-cols-2 lg:grid-cols-1">
+          <div className="rounded-lg bg-card p-6 shadow-sm">
+            <p className="text-xs uppercase text-muted-foreground">Top Sports</p>
+            <div className="mt-4 space-y-3 text-sm">
+              {sportsBreakdown.length ? (
+                sportsBreakdown.map((item) => (
+                  <div key={item.label} className="flex items-center justify-between gap-2">
+                    <div>
+                      <p className="font-medium">{item.label}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {item.bets} bets • ROI {item.roi.toFixed(1)}%
+                      </p>
+                    </div>
+                    <span className="text-sm font-semibold">
+                      {formatCurrency(item.stake, bankrolls[0]?.currency ?? "BRL")}
+                    </span>
                   </div>
-                  <span className="text-sm font-semibold">
-                    {formatCurrency(item.stake, bankrolls[0]?.currency ?? "BRL")}
-                  </span>
-                </div>
-              ))
-            ) : (
-              <p className="text-xs text-muted-foreground">Record bets to see sports ROI.</p>
-            )}
+                ))
+              ) : (
+                <p className="text-xs text-muted-foreground">Record bets to see sports ROI.</p>
+              )}
+            </div>
+          </div>
+          <div className="rounded-lg bg-card p-6 shadow-sm">
+            <p className="text-xs uppercase text-muted-foreground">Top Leagues</p>
+            <div className="mt-4 space-y-3 text-sm">
+              {leaguesBreakdown.length ? (
+                leaguesBreakdown.map((item) => (
+                  <div key={item.label} className="flex items-center justify-between gap-2">
+                    <div>
+                      <p className="font-medium">{item.label}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {item.bets} bets • ROI {item.roi.toFixed(1)}%
+                      </p>
+                    </div>
+                    <span className="text-sm font-semibold">
+                      {formatCurrency(item.stake, bankrolls[0]?.currency ?? "BRL")}
+                    </span>
+                  </div>
+                ))
+              ) : (
+                <p className="text-xs text-muted-foreground">Track leagues to unlock insights.</p>
+              )}
+            </div>
           </div>
         </div>
-        <div className="rounded-lg border bg-card p-6">
-          <p className="text-xs uppercase text-muted-foreground">Top Leagues</p>
-          <div className="mt-4 space-y-3 text-sm">
-            {leaguesBreakdown.length ? (
-              leaguesBreakdown.map((item) => (
-                <div key={item.label} className="flex items-center justify-between gap-2">
-                  <div>
-                    <p className="font-medium">{item.label}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {item.bets} bets • ROI {item.roi.toFixed(1)}%
-                    </p>
-                  </div>
-                  <span className="text-sm font-semibold">
-                    {formatCurrency(item.stake, bankrolls[0]?.currency ?? "BRL")}
-                  </span>
-                </div>
-              ))
-            ) : (
-              <p className="text-xs text-muted-foreground">Track leagues to unlock insights.</p>
-            )}
-          </div>
-        </div>
-        <div className="rounded-lg border bg-card p-6">
+        <div className="rounded-lg bg-card p-6 shadow-sm">
           <p className="text-xs uppercase text-muted-foreground">Bankroll Growth</p>
           <div className="mt-4 h-40">
             {growthPoints.length ? (
