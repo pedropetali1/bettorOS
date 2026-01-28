@@ -12,5 +12,7 @@ export default middleware((req) => {
 });
 
 export const config = {
-  matcher: ["/((?!api/auth|login|register|_next|favicon.ico).*)"],
+  matcher: [
+    "/((?!api/auth|login|register|forgot-password|reset-password|_next|favicon.ico).*)",
+  ],
 };

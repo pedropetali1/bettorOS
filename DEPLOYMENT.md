@@ -119,10 +119,19 @@ You can automate migrations by updating your build command in Vercel:
 1. Go to **Settings → General → Build & Development Settings**
 2. Update **Build Command** to:
    ```bash
-   npx prisma migrate deploy && next build
+   npm run build
    ```
 
-**Note**: This requires `DIRECT_URL` to be set in Vercel environment variables.
+**Note**: The build script runs `prisma migrate deploy` and requires `DIRECT_URL` to be set in Vercel environment variables.
+
+## Environment Variables Checklist (Vercel)
+
+Set these in **Settings → Environment Variables** for both **Production** and **Preview**:
+
+1. `DATABASE_URL` (pooler/pgbouncer URL)
+2. `DIRECT_URL` (direct connection URL for migrations)
+3. `AUTH_SECRET`
+4. `AUTH_URL` (your production domain)
 
 ## Step 5: Verify Deployment
 
