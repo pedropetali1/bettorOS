@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { useActionState } from "react";
+import { Suspense, useActionState } from "react";
 import { useFormStatus } from "react-dom";
 
 import { resetPassword } from "@/app/reset-password/actions";
@@ -26,7 +26,7 @@ function SubmitButton() {
   );
 }
 
-export default function ResetPasswordPage() {
+function ResetPasswordForm() {
   const searchParams = useSearchParams();
   const token = searchParams.get("token") ?? "";
   const [state, formAction] = useActionState(resetPassword, initialState);
@@ -65,5 +65,15 @@ export default function ResetPasswordPage() {
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+export default function ResetPasswordPage() {
+  return (
+    <Suspense
+      fallback={<div className="flex min-h-[70vh] items-center justify-center">Loading...</div>}
+    >
+      <ResetPasswordForm />
+    </Suspense>
   );
 }
